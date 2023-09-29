@@ -16,7 +16,7 @@ Copy the src folder from the example/ folder to test the api
 ### Mac Usage 
 **Use the project generator**<br />
 Use the project generator to add ofxOrbbec to your project or import the example project. <br />
-NOTE: Mac cannot use as many of the cameras as Linux or Windows 
+NOTE: Mac cannot use as many of the cameras as Linux or Windows. See the supported cameras in the list here: https://www.orbbec.com/developers/orbbec-sdk/  
 
 ### Windows Usage 
 **Use the project generator**<br />
