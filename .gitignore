@@ -1,0 +1,130 @@
+
+# build files
+/**/openFrameworks.a
+/**/libopenFrameworks.a
+/**/libopenFrameworksDebug.a
+/**/openFrameworksDebug.a
+/**/openFrameworksUniversal.a
+
+# rule to avoid non-official apps going into git
+# see apps/.gitignore
+saves/*
+/**/examples/**
+
+#########################
+# general
+#########################
+DerivedData/*
+DerivedData/
+[Bb]uild/
+[Oo]bj/
+*.o
+examples/**/[Dd]ebug*/
+examples/**/[Rr]elease*/
+*.mode*
+*.app/
+*.iorec
+*.pyc
+.svn/
+*.log
+*.cpp.eep
+*.cpp.elf
+*.cpp.hex
+
+# XCode
+*.pbxuser
+*.perspective
+*.perspectivev3
+*.mode1v3
+*.mode2v3
+# XCode 4
+xcuserdata
+*.xcworkspace
+xcshareddata/
+
+# OSX
+.DS_Store
+*.swp
+*~.nib
+# Thumbnails
+._*
+
+# Visual Studio
+*.sdf
+*.opensdf
+*.suo
+*.pdb
+*.ilk
+*.aps
+ipch/
+.vs/
+
+# Folder config file
+Desktop.ini
+/**/bin/*.exe
+/**/bin/*.exp
+/**/bin/*.lib
+/**/bin/*.dll
+*.opendb
+
+*.VC.db
+
+# Windows
+# Windows image file caches
+Thumbs.db
+# Folder config file
+Desktop.ini
+
+PSDs/
+_UntrackedFiles/
+renders/
+
+*.zip
+*.psd 
+*.obj
+*.sdf
+obj/
+*.tlog
+*.opensdf
+*.suo
+bin/*.exp
+bin/*.lib
+*.line
+#screen saver
+*.saver
+*.dSYM/
+_spriteSheets/*
+_spriteSheets/
+
+# ofxTimeline 
+*trackPositions.xml*
+*_zoomer.xml*
+*_inout.xml*
+
+#linux
+*.so
+*.d
+*.o
+
+#Blender
+*.blend1
+
+*.iorecv3
+*.iobj
+
+#FBX included folders
+*.fbm/*
+*.fbm/
+*.fbm
+
+*.ipdb
+*.db-shm
+*.db-wal
+/**/browse.db
+/**/bin/Final
+/**/projectGenerator-osx/
+/**/projectGenerator-linux64/
+
+
+
+
