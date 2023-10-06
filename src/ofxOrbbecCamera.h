@@ -4,6 +4,21 @@
 #include "libobsensor/hpp/Error.hpp"
 #include <opencv2/opencv.hpp>
 
+
+//If you have ffmpeg / libavcodec included in your project uncomment below 
+//You can easily get the required libs from ofxFFmpegRTSP addon ( if you add it to your project )
+#define OFXORBBEC_DECODE_H264_H265
+
+// this allows us to decode the color video streams from Femto Mega over IP connection 
+#ifdef OFXORBBEC_DECODE_H264_H265
+    extern "C" {
+    #include <libavcodec/avcodec.h>
+    #include <libavformat/avformat.h>
+    #include <libswscale/swscale.h>
+    #include <libavutil/imgutils.h>
+    }
+#endif 
+
 namespace ofxOrbbec{
 
 struct Settings{
@@ -34,7 +49,12 @@ struct Settings{
 class ofxOrbbecCamera{
     public:
 
+        ofxOrbbecCamera() = default; 
+        ofxOrbbecCamera( const ofxOrbbecCamera & A) = default; 
+        ~ofxOrbbecCamera();
+
         bool open(ofxOrbbec::Settings aSettings);
+        bool isConnected();
         void close();
         void update(); 
 
@@ -73,4 +93,22 @@ class ofxOrbbecCamera{
 
 		std::shared_ptr <ob::Pipeline> mPipe;
    		std::shared_ptr <ob::PointCloudFilter> pointCloud;
+
+        #ifdef OFXORBBEC_DECODE_H264_H265 
+
+            bool bInitOneTime = false; 
+
+            AVCodec* codec264 = nullptr;
+            AVCodecContext* codecContext264 = nullptr;
+
+            AVCodec* codec265 = nullptr;
+            AVCodecContext* codecContext265 = nullptr;
+
+            SwsContext* swsContext = nullptr;
+
+            void initH26XCodecs();
+            ofPixels decodeH26XFrame(uint8_t * myData, int dataSize, bool bH264);
+
+        #endif 
+
 };

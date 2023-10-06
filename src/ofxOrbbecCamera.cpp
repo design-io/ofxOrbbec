@@ -1,7 +1,7 @@
 
 #include "ofxOrbbecCamera.h"
 
-//Static Functions 
+//Static functions 
 std::shared_ptr <ob::Context> ofxOrbbecCamera::ofxOrbbecCamera::ctx;
 std::shared_ptr<ob::Context> & ofxOrbbecCamera::getContext(){
     if(!ctx){
@@ -37,21 +37,38 @@ std::vector < std::shared_ptr<ob::DeviceInfo> > ofxOrbbecCamera::getDeviceList()
 }
 
 //Class functions 
+ofxOrbbecCamera::~ofxOrbbecCamera(){
+    close();
+    #ifdef OFXORBBEC_DECODE_H264_H265
+        if(bInitOneTime){
+            avcodec_close(codecContext264);
+            av_free(codecContext264);
+
+            avcodec_close(codecContext265);
+            av_free(codecContext265);
+        }
+    #endif 
+}
 
 void ofxOrbbecCamera::close(){
     clear();
 }
 
 void ofxOrbbecCamera::clear(){
-    if( mPipe ){
-        //doing this to prevent issues on app exit 
-        auto frameSet = mPipe->waitForFrames(100);
-        mPipe->stop();
-        //doing this to prevent issues on app exit 
-        ofSleepMillis(50);
+    try{
+        if( mPipe ){
+            //doing this to prevent issues on app exit 
+            auto frameSet = mPipe->waitForFrames(20);
+            mPipe->stop();
+            //doing this to prevent issues on app exit 
+            ofSleepMillis(20);
+        }
+        mPipe.reset(); 
+        pointCloud.reset();
+    }catch(ob::Error &e) {
+        std::cerr << "function:" << e.getName() << "\nargs:" << e.getArgs() << "\nmessage:" << e.getMessage() << "\ntype:" << e.getExceptionType() << std::endl;
     }
-    mPipe.reset(); 
-    pointCloud.reset();
+
     mCurrentSettings = ofxOrbbec::Settings();
     bNewFrameColor = bNewFrameDepth = bNewFrameIR = false; 
 }
@@ -197,6 +214,8 @@ bool ofxOrbbecCamera::open(ofxOrbbec::Settings aSettings){
                 }
             }
 
+            ob::Context::setLoggerSeverity(OB_LOG_SEVERITY_ERROR);
+
         }else{
             return false; 
         }
@@ -204,6 +223,13 @@ bool ofxOrbbecCamera::open(ofxOrbbec::Settings aSettings){
     }
 
     return false; 
+}
+
+bool ofxOrbbecCamera::isConnected(){
+	if( mPipe && mPipe->getDevice() ){
+		return true;
+	}
+	return false;
 }
 
 ofPixels ofxOrbbecCamera::getDepthPixels(){
@@ -233,7 +259,8 @@ void ofxOrbbecCamera::update(){
     bNewFrameIR = false; 
 
     if( mPipe ){
-        auto frameSet = mPipe->waitForFrames(100);
+        //TODO: thread me 
+        auto frameSet = mPipe->waitForFrames(20);
         if(frameSet) {
             
             if( mCurrentSettings.bDepth ){
@@ -301,6 +328,84 @@ bool ofxOrbbecCamera::isFrameNewColor(){
 }
 
 
+#ifdef OFXORBBEC_DECODE_H264_H265
+
+void ofxOrbbecCamera::initH26XCodecs(){
+    if( !bInitOneTime ){
+        // Initialize FFmpeg libraries
+        av_register_all();
+        avcodec_register_all();
+        bInitOneTime = true; 
+
+        // Allocate an AVCodecContext and set its codec
+        codec264 = avcodec_find_decoder(AV_CODEC_ID_H264);
+        codecContext264 = avcodec_alloc_context3(codec264);
+        avcodec_open2(codecContext264, codec264, NULL);
+
+        // // Allocate an AVCodecContext and set its codec
+        codec265 = avcodec_find_decoder(AV_CODEC_ID_H265);
+        codecContext265 = avcodec_alloc_context3(codec265);
+        avcodec_open2(codecContext265, codec265, NULL);
+    }
+}
+
+ofPixels ofxOrbbecCamera::decodeH26XFrame(uint8_t * myData, int dataSize, bool bH264){
+    initH26XCodecs();
+    
+    AVPacket packet; 
+    av_init_packet(&packet);
+    packet.data = myData;
+    packet.size = dataSize;
+
+    // Allocate an AVFrame for decoded data
+    AVFrame* frame = av_frame_alloc();
+    
+    ofPixels pix;
+
+    auto codecContext = codecContext264;
+    if( !bH264 ){
+        codecContext = codecContext265; 
+    }
+
+    int ret = avcodec_send_packet(codecContext, &packet);
+    if (ret < 0) {
+        cout << "Error sending a packet for decoding" << endl; 
+        return pix; 
+    }
+ 
+    int frameDecoded = avcodec_receive_frame(codecContext, frame);
+
+    if( frameDecoded == 0 ){
+
+        // Allocate an AVFrame for RGB data
+        AVFrame* rgbFrame = av_frame_alloc();
+
+        rgbFrame->format = AV_PIX_FMT_RGB24; 
+        rgbFrame->width = codecContext->width; 
+        rgbFrame->height = codecContext->height; 
+
+        av_frame_get_buffer(rgbFrame, 0);
+
+        // Create a sws context for RGB conversion
+        swsContext = sws_getCachedContext(swsContext, codecContext->width, codecContext->height, codecContext->pix_fmt,
+            codecContext->width, codecContext->height, (AVPixelFormat)rgbFrame->format, SWS_BILINEAR, NULL, NULL, NULL);
+        
+        // Convert the decoded frame to RGB
+        int result = sws_scale(swsContext, frame->data, frame->linesize, 0, frame->height, rgbFrame->data, rgbFrame->linesize);
+        pix.setFromPixels((unsigned char * )rgbFrame->data[0], codecContext->width, codecContext->height, 3); 
+
+        av_frame_free(&rgbFrame);
+    }
+
+    // Clean up and free allocated memory
+    av_frame_free(&frame);
+
+    return pix; 
+}
+
+#endif 
+
+
 ofPixels ofxOrbbecCamera::processFrame(shared_ptr<ob::Frame> frame){
 
     ofPixels pix; 
@@ -308,7 +413,6 @@ ofPixels ofxOrbbecCamera::processFrame(shared_ptr<ob::Frame> frame){
     cv::Mat rstMat;
 
     try{
-
         
         if( !frame ){
             return pix; 
@@ -318,8 +422,22 @@ ofPixels ofxOrbbecCamera::processFrame(shared_ptr<ob::Frame> frame){
             auto videoFrame = frame->as<ob::VideoFrame>();
             switch(videoFrame->format()) {
             case OB_FORMAT_H264:
+
+                #ifdef OFXORBBEC_DECODE_H264_H265 
+                    pix = decodeH26XFrame((uint8_t*)videoFrame->data(), videoFrame->dataSize(), true);
+                #else
+                    ofLogError("ofxOrbbecCamera::processFrame") << " h264 / h265 not enabled. Define OFXORBBEC_DECODE_H264_H265 or set color format to OB_FORMAT_RGB " << endl;
+                #endif  
+
+            break; 
             case OB_FORMAT_H265:
-                ofLogError("ofxOrbbecCamera::processFrame") << " h264 / h265 not supported - set color format to OB_FORMAT_RGB " << endl;
+
+                #ifdef OFXORBBEC_DECODE_H264_H265 
+                    pix = decodeH26XFrame((uint8_t*)videoFrame->data(), videoFrame->dataSize(), false);
+                #else
+                    ofLogError("ofxOrbbecCamera::processFrame") << " h264 / h265 not enabled. Define OFXORBBEC_DECODE_H264_H265 or set color format to OB_FORMAT_RGB " << endl;
+                #endif 
+
             break; 
             case OB_FORMAT_MJPG: {
 
