@@ -578,6 +578,11 @@ typedef enum {
     OB_PROP_IR_SHORT_EXPOSURE_BOOL = 2032,
 
     /**
+     * @brief Color camera HDR
+     */
+    OB_PROP_COLOR_HDR_BOOL = 2034,
+
+    /**
      * @brief Software disparity to depth
      */
     OB_PROP_SDK_DISPARITY_TO_DEPTH_BOOL = 3004,
