@@ -21,7 +21,7 @@ NOTE: Mac cannot use as many of the cameras as Linux or Windows. See the support
 ### Windows Usage 
 **Use the project generator**<br />
 Use the project generator to add ofxOrbbec to your project or import the example project. <br />
-If the OrbbecSDK.dll is not in the bin/ folder of your project copy it over from libs/orbbec/lib/vs/x64/ 
+If the OrbbecSDK.dll and the depthengine_2_0.dll is not in the bin/ folder of your project copy it over from libs/orbbec/lib/vs/x64/ 
 
 ### Example output 
 
