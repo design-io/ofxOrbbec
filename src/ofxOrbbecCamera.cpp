@@ -1,21 +1,11 @@
 
 #include "ofxOrbbecCamera.h"
 
-//Static functions 
-std::shared_ptr <ob::Context> ofxOrbbecCamera::ofxOrbbecCamera::ctx;
-std::shared_ptr<ob::Context> & ofxOrbbecCamera::getContext(){
-    if(!ctx){
-        // don't log to file 
-        ob::Context::setLoggerToFile(OB_LOG_SEVERITY_OFF, "log.txt"); 
-        ctx = make_shared<ob::Context>(); 
-    }
-    return ctx; 
-}
 
 std::vector < std::shared_ptr<ob::DeviceInfo> > ofxOrbbecCamera::getDeviceList(){
     std::vector<std::shared_ptr<ob::DeviceInfo> > dInfo; 
 
-    auto tCtx = ofxOrbbecCamera::getContext(); 
+    auto tCtx = make_shared<ob::Context>(); //ofxOrbbecCamera::getContext();
 
     // Query the list of connected devices
         auto devList = tCtx->queryDeviceList();
@@ -46,6 +36,7 @@ ofxOrbbecCamera::~ofxOrbbecCamera(){
 
             avcodec_close(codecContext265);
             av_free(codecContext265);
+            bInitOneTime = false; 
         }
     #endif 
 }
@@ -55,28 +46,36 @@ void ofxOrbbecCamera::close(){
 }
 
 void ofxOrbbecCamera::clear(){
+
+    if( isThreadRunning() ){
+        waitForThread(true, 2000); 
+    }
     try{
-        if( mPipe ){
-            //doing this to prevent issues on app exit 
-            auto frameSet = mPipe->waitForFrames(20);
-            mPipe->stop();
-            //doing this to prevent issues on app exit 
-            ofSleepMillis(20);
+		if( mPipe ){	
+			mPipe->stop();
+			mPipe.reset();
+			pointCloud.reset();
         }
-        mPipe.reset(); 
-        pointCloud.reset();
     }catch(ob::Error &e) {
         std::cerr << "function:" << e.getName() << "\nargs:" << e.getArgs() << "\nmessage:" << e.getMessage() << "\ntype:" << e.getExceptionType() << std::endl;
     }
 
     mCurrentSettings = ofxOrbbec::Settings();
-    bNewFrameColor = bNewFrameDepth = bNewFrameIR = false; 
+    bNewFrameColor = bNewFrameDepth = bNewFrameIR = false;
+    mInternalColorFrameNo = mInternalDepthFrameNo = 0;
+    mExtColorFrameNo = mExtDepthFrameNo = 0;
+    mPipe.reset();
+	ctxLocal.reset();
 }
 
 bool ofxOrbbecCamera::open(ofxOrbbec::Settings aSettings){
     clear(); 
+	
+	ob::Context::setLoggerToFile(OB_LOG_SEVERITY_OFF, "log.txt");
+	ob::Context::setLoggerToConsole(OB_LOG_SEVERITY_ERROR);
 
-    auto tCtx = ofxOrbbecCamera::getContext(); 
+	ctxLocal = make_shared<ob::Context>();
+    auto tCtx = ctxLocal;
 
     std::shared_ptr<ob::Device> device;
 
@@ -216,13 +215,15 @@ bool ofxOrbbecCamera::open(ofxOrbbec::Settings aSettings){
 
             ob::Context::setLoggerSeverity(OB_LOG_SEVERITY_ERROR);
 
+            startThread();
+
         }else{
             return false; 
         }
 
     }
 
-    return false; 
+    return true; 
 }
 
 bool ofxOrbbecCamera::isConnected(){
@@ -233,85 +234,101 @@ bool ofxOrbbecCamera::isConnected(){
 }
 
 ofPixels ofxOrbbecCamera::getDepthPixels(){
+    mExtDepthFrameNo = mInternalDepthFrameNo;
     return mDepthPixels;
 }
 
 ofFloatPixels ofxOrbbecCamera::getDepthPixelsF(){
+    mExtDepthFrameNo = mInternalDepthFrameNo;
     return mDepthPixelsF;
 } 
 
 ofPixels ofxOrbbecCamera::getColorPixels(){
+    mExtColorFrameNo = mInternalColorFrameNo;
     return mColorPixels;
 }
 
 vector <glm::vec3> ofxOrbbecCamera::getPointCloud(){
+    mExtDepthFrameNo = mInternalDepthFrameNo;
     return mPointCloudPts;
 } 
 
 ofMesh ofxOrbbecCamera::getPointCloudMesh(){
+    mExtDepthFrameNo = mInternalDepthFrameNo;
     return mPointCloudMesh;
 }
 
 void ofxOrbbecCamera::update(){
-
-    bNewFrameDepth = false;
-    bNewFrameColor = false; 
-    bNewFrameIR = false; 
-
     if( mPipe ){
-        //TODO: thread me 
-        auto frameSet = mPipe->waitForFrames(20);
-        if(frameSet) {
-            
-            if( mCurrentSettings.bDepth ){
-                auto depthFrame = frameSet->getFrame(OB_FRAME_DEPTH);
-                if(depthFrame) {
-                    mDepthPixels = processFrame(depthFrame);
+        bNewFrameDepth = bNewFrameColor = bNewFrameIR = false; 
+        if( mInternalDepthFrameNo > mExtDepthFrameNo ){
+            bNewFrameDepth = true; 
+            bNewFrameIR = true; 
+        }
+        if( mInternalColorFrameNo > mExtColorFrameNo ){
+            bNewFrameColor = true; 
+        }
+    }
+}
 
-                    if( mCurrentSettings.bPointCloud && !mCurrentSettings.bPointCloudRGB ){
-                        try {
-                            std::shared_ptr<ob::Frame> frame = pointCloud->process(frameSet);
-                            pointCloudToMesh(frame);
-                        }
-                        catch(std::exception &e) {
-                            std::cout << "Get point cloud failed" << std::endl;
-                        };
-                    }
+void ofxOrbbecCamera::threadedFunction(){
+    while(isThreadRunning()){
+        if( mPipe ){
+            auto frameSet = mPipe->waitForFrames(20);
+            if(frameSet) {
+                
+                if( mCurrentSettings.bDepth ){
+                    auto depthFrame = frameSet->getFrame(OB_FRAME_DEPTH);
+                    if(depthFrame) {
+                        mDepthPixels = processFrame(depthFrame);
 
-                    bNewFrameDepth = true; 
-                }
-            }
-
-            if( mCurrentSettings.bColor ){
-                auto colorFrame = frameSet->getFrame(OB_FRAME_COLOR);
-                if(colorFrame) {
-                    mColorPixels = processFrame(colorFrame);
-
-                    if( mCurrentSettings.bPointCloudRGB ){
-                        if(frameSet != nullptr && frameSet->depthFrame() != nullptr && frameSet->colorFrame() != nullptr) {
-                            // point position value multiply depth value scale to convert uint to millimeter (for some devices, the default depth value uint is not
-                            // millimeter)
-                            auto depthValueScale = frameSet->depthFrame()->getValueScale();
-                            pointCloud->setPositionDataScaled(depthValueScale);
+                        if( mCurrentSettings.bPointCloud && !mCurrentSettings.bPointCloudRGB ){
                             try {
                                 std::shared_ptr<ob::Frame> frame = pointCloud->process(frameSet);
-                                pointCloudToMesh(frame, true);
+                                pointCloudToMesh(frame);
                             }
                             catch(std::exception &e) {
                                 std::cout << "Get point cloud failed" << std::endl;
+                            };
+                        }
+
+                        mInternalDepthFrameNo++; 
+                    }
+                }
+
+                if( mCurrentSettings.bColor ){
+                    auto colorFrame = frameSet->getFrame(OB_FRAME_COLOR);
+                    if(colorFrame) {
+                        mColorPixels = processFrame(colorFrame);
+
+                        if( mCurrentSettings.bPointCloudRGB ){
+                            if(frameSet != nullptr && frameSet->depthFrame() != nullptr && frameSet->colorFrame() != nullptr) {
+                                // point position value multiply depth value scale to convert uint to millimeter (for some devices, the default depth value uint is not
+                                // millimeter)
+                                auto depthValueScale = frameSet->depthFrame()->getValueScale();
+                                pointCloud->setPositionDataScaled(depthValueScale);
+                                try {
+                                    std::shared_ptr<ob::Frame> frame = pointCloud->process(frameSet);
+                                    pointCloudToMesh(frame, true);
+                                }
+                                catch(std::exception &e) {
+                                    std::cout << "Get point cloud failed" << std::endl;
+                                }
                             }
                         }
-                    }
 
-                    //In case h264 and we can't decode - pixels will be empty 
-                    if(mColorPixels.getWidth()){
-                        bNewFrameColor = true; 
-                    }
+                        //In case h264 and we can't decode - pixels will be empty 
+                        if(mColorPixels.getWidth()){
+                        mInternalColorFrameNo++; 
+                        }
 
+                    }
                 }
-            }
 
+            }
         }
+
+        ofSleepMillis(2);
     }
 }
         

@@ -46,7 +46,7 @@ struct Settings{
 };
 
 
-class ofxOrbbecCamera{
+class ofxOrbbecCamera : public ofThread{
     public:
 
         ofxOrbbecCamera() = default; 
@@ -56,7 +56,7 @@ class ofxOrbbecCamera{
         bool open(ofxOrbbec::Settings aSettings);
         bool isConnected();
         void close();
-        void update(); 
+        void update();
 
         static std::vector < std::shared_ptr<ob::DeviceInfo> > getDeviceList(); 
 
@@ -74,16 +74,20 @@ class ofxOrbbecCamera{
         ofMesh getPointCloudMesh();
 
     protected:
+        void threadedFunction() override; 
         void clear(); 
         
-        static std::shared_ptr<ob::Context> & getContext(); 
-		static std::shared_ptr <ob::Context> ctx;
-
         ofPixels processFrame(shared_ptr<ob::Frame> frame);
         void pointCloudToMesh(shared_ptr<ob::Frame> frame, bool bRGB = false);
         
         ofxOrbbec::Settings mCurrentSettings;
+        
         bool bNewFrameColor, bNewFrameDepth, bNewFrameIR = false; 
+        
+        unsigned int mInternalDepthFrameNo = 0;
+		unsigned int mInternalColorFrameNo = 0;
+		unsigned int mExtDepthFrameNo = 0;
+		unsigned int mExtColorFrameNo = 0;
 
         ofPixels mDepthPixels, mColorPixels; 
         ofFloatPixels mDepthPixelsF;
@@ -93,6 +97,7 @@ class ofxOrbbecCamera{
 
 		std::shared_ptr <ob::Pipeline> mPipe;
    		std::shared_ptr <ob::PointCloudFilter> pointCloud;
+   		std::shared_ptr <ob::Context> ctxLocal;
 
         #ifdef OFXORBBEC_DECODE_H264_H265 
 
