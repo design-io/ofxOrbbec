@@ -195,6 +195,9 @@ bool ofxOrbbecCamera::open(ofxOrbbec::Settings aSettings){
                 }else{
                     config->setAlignMode(ALIGN_DISABLE);
                 }
+
+                mPointCloudMesh = ofMesh();
+                mPointCloudMesh.setMode(OF_PRIMITIVE_POINTS);
             }
             
 
@@ -550,12 +553,8 @@ void ofxOrbbecCamera::pointCloudToMesh(shared_ptr<ob::Frame> frame, bool bRGB){
             pointsSize = frame->dataSize() / sizeof(OBPoint);
         }
 
-        mPointCloudMesh = ofMesh();  
         mPointCloudPts.clear();
         mPointCloudPts.reserve(pointsSize);
-
-        mPointCloudMesh.setMode(OF_PRIMITIVE_POINTS);
-
 
         if( bRGB ){
             std::vector <ofFloatColor> tColors;
@@ -570,6 +569,7 @@ void ofxOrbbecCamera::pointCloudToMesh(shared_ptr<ob::Frame> frame, bool bRGB){
 
                 point++;
             }
+            mPointCloudMesh.clear();
             mPointCloudMesh.addColors(tColors);
 
         }else{
@@ -580,6 +580,7 @@ void ofxOrbbecCamera::pointCloudToMesh(shared_ptr<ob::Frame> frame, bool bRGB){
                 mPointCloudPts.push_back(pt);
                 point++;
             }
+            mPointCloudMesh.clear();
         }
 
         mPointCloudMesh.addVertices(mPointCloudPts);
