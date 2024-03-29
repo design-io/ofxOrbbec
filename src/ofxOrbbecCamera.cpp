@@ -1,5 +1,6 @@
 
 #include "ofxOrbbecCamera.h"
+#include <libobsensor/hpp/Utils.hpp>
 
 
 std::vector < std::shared_ptr<ob::DeviceInfo> > ofxOrbbecCamera::getDeviceList(){
@@ -72,7 +73,7 @@ bool ofxOrbbecCamera::open(ofxOrbbec::Settings aSettings){
     clear(); 
 	
 	ob::Context::setLoggerToFile(OB_LOG_SEVERITY_OFF, "log.txt");
-	ob::Context::setLoggerToConsole(OB_LOG_SEVERITY_ERROR);
+	ob::Context::setLoggerToConsole(OB_LOG_SEVERITY_INFO);
 
 	ctxLocal = make_shared<ob::Context>();
     auto tCtx = ctxLocal;
@@ -138,11 +139,12 @@ bool ofxOrbbecCamera::open(ofxOrbbec::Settings aSettings){
              // Create Config for configuring Pipeline work
             std::shared_ptr<ob::Config> config = std::make_shared<ob::Config>();
 
+			shared_ptr<ob::StreamProfile> depthProfile;
+			shared_ptr<ob::StreamProfile> colorProfile;
+
             if( aSettings.bDepth ){
                 // Get the depth camera configuration list
                 auto depthProfileList = mPipe->getStreamProfileList(OB_SENSOR_DEPTH);
-
-                shared_ptr<ob::StreamProfile> depthProfile;
 
                 if( mCurrentSettings.depthFrameSize.requestWidth > 0){
                     try {
@@ -167,7 +169,6 @@ bool ofxOrbbecCamera::open(ofxOrbbec::Settings aSettings){
             if( aSettings.bColor ){
                 // Get the color camera configuration list
                 auto colorProfileList = mPipe->getStreamProfileList(OB_SENSOR_COLOR);
-                shared_ptr<ob::StreamProfile> colorProfile;
 
                 if( mCurrentSettings.colorFrameSize.requestWidth > 0){
                     try {
@@ -191,10 +192,25 @@ bool ofxOrbbecCamera::open(ofxOrbbec::Settings aSettings){
 
             if( aSettings.bPointCloud ){
                 if( aSettings.bColor && aSettings.bPointCloudRGB ){
-                    config->setAlignMode(ALIGN_D2C_HW_MODE);
+                    
+					// Try find supported depth to color align hardware mode profile
+					auto depthProfileList = mPipe->getD2CDepthProfileList(colorProfile, ALIGN_D2C_HW_MODE);
+					if(depthProfileList->count() > 0) {
+						config->setAlignMode(ALIGN_D2C_HW_MODE);
+					}
+					else {
+						// Try find supported depth to color align software mode profile
+						auto depthProfileList = mPipe->getD2CDepthProfileList(colorProfile, ALIGN_D2C_SW_MODE);
+						if(depthProfileList->count() > 0) {
+							config->setAlignMode(ALIGN_D2C_SW_MODE);
+						}else{
+							config->setAlignMode(ALIGN_DISABLE);
+						}
+					}
+                    
                 }else{
                     config->setAlignMode(ALIGN_DISABLE);
-                }
+				}
             }
             
 
@@ -206,10 +222,35 @@ bool ofxOrbbecCamera::open(ofxOrbbec::Settings aSettings){
 
                 pointCloud = std::make_shared<ob::PointCloudFilter>();
                 pointCloud->setCameraParam(cameraParam);
+                
                 if( aSettings.bPointCloudRGB ){
                     pointCloud->setCreatePointFormat(OB_FORMAT_RGB_POINT);
+					auto param = mPipe->getCalibrationParam(config);
+										
+					auto     vsp            = colorProfile->as<ob::VideoStreamProfile>();
+					uint32_t colorWidth     = vsp->width();
+					uint32_t colorHeight    = vsp->height();
+					uint32_t tableSize = colorWidth * colorHeight * 2 * sizeof(float);
+					xyTableData.resize(tableSize);
+					
+					if(!ob::CoordinateTransformHelper::transformationInitXYTables(param, OB_SENSOR_COLOR, &xyTableData[0], &tableSize, &xyTables)) {
+						ofLogError() << " couldn't init xyTables for depth " << endl;
+					}
+					
                 }else{
                     pointCloud->setCreatePointFormat(OB_FORMAT_POINT);
+                    
+					auto param = mPipe->getCalibrationParam(config);
+					auto     vsp            = depthProfile->as<ob::VideoStreamProfile>();
+					uint32_t depthWidth     = vsp->width();
+					uint32_t depthHeight    = vsp->height();
+					uint32_t tableSize = depthWidth * depthHeight * 2 * sizeof(float);
+					xyTableData.resize(tableSize);
+					
+					if(!ob::CoordinateTransformHelper::transformationInitXYTables(param, OB_SENSOR_DEPTH, &xyTableData[0], &tableSize, &xyTables)) {
+						ofLogError() << " couldn't init xyTables for depth " << endl;
+					}
+
                 }
             }
 
@@ -250,12 +291,12 @@ ofPixels ofxOrbbecCamera::getColorPixels(){
 
 vector <glm::vec3> ofxOrbbecCamera::getPointCloud(){
     mExtDepthFrameNo = mInternalDepthFrameNo;
-    return mPointCloudPts;
+    return mPointCloudPtsLocal;
 } 
 
 ofMesh ofxOrbbecCamera::getPointCloudMesh(){
     mExtDepthFrameNo = mInternalDepthFrameNo;
-    return mPointCloudMesh;
+    return mPointCloudMeshLocal;
 }
 
 void ofxOrbbecCamera::update(){
@@ -284,15 +325,16 @@ void ofxOrbbecCamera::threadedFunction(){
 
                         if( mCurrentSettings.bPointCloud && !mCurrentSettings.bPointCloudRGB ){
                             try {
-                                std::shared_ptr<ob::Frame> frame = pointCloud->process(frameSet);
-                                pointCloudToMesh(frame);
+                                std::shared_ptr<ob::Frame> pointCloudFrame = pointCloud->process(frameSet);
+                                pointCloudToMesh(frameSet->depthFrame());
                             }
                             catch(std::exception &e) {
                                 std::cout << "Get point cloud failed" << std::endl;
                             };
+                        }else{
+                            mInternalDepthFrameNo++; 
                         }
 
-                        mInternalDepthFrameNo++; 
                     }
                 }
 
@@ -308,19 +350,21 @@ void ofxOrbbecCamera::threadedFunction(){
                                 auto depthValueScale = frameSet->depthFrame()->getValueScale();
                                 pointCloud->setPositionDataScaled(depthValueScale);
                                 try {
-                                    std::shared_ptr<ob::Frame> frame = pointCloud->process(frameSet);
-                                    pointCloudToMesh(frame, true);
+                                    std::shared_ptr<ob::Frame> pointCloudFrame = pointCloud->process(frameSet);
+                                    pointCloudToMesh(frameSet->depthFrame(), frameSet->colorFrame());
                                 }
                                 catch(std::exception &e) {
                                     std::cout << "Get point cloud failed" << std::endl;
                                 }
                             }
+                        }else{
+                            //In case h264 and we can't decode - pixels will be empty 
+                            if(mColorPixels.getWidth()){
+                                mInternalColorFrameNo++; 
+                            }
                         }
 
-                        //In case h264 and we can't decode - pixels will be empty 
-                        if(mColorPixels.getWidth()){
-                        mInternalColorFrameNo++; 
-                        }
+                
 
                     }
                 }
@@ -539,30 +583,45 @@ ofPixels ofxOrbbecCamera::processFrame(shared_ptr<ob::Frame> frame){
     return pix; 
 }
 
-void ofxOrbbecCamera::pointCloudToMesh(shared_ptr<ob::Frame> frame, bool bRGB){
-    if( frame ){
-        
-        int pointsSize = 0;
+void ofxOrbbecCamera::pointCloudToMesh(shared_ptr<ob::DepthFrame> depthFrame, shared_ptr<ob::ColorFrame> colorFrame){
+    if( depthFrame ){
+    
+		bool bRGB = false;
+		if(colorFrame){
+			bRGB = true;
+		}
 
-        if(bRGB){
-            pointsSize = frame->dataSize() / sizeof(OBColorPoint);
+        int numPoints = 0;
+		uint32_t pointcloudSize = 0;
+		
+		 if(bRGB){
+			numPoints = colorFrame->width() * colorFrame->height();
+            pointcloudSize = numPoints * sizeof(OBColorPoint);
         }else{
-            pointsSize = frame->dataSize() / sizeof(OBPoint);
+			numPoints = depthFrame->width() * depthFrame->height();
+            pointcloudSize = numPoints * sizeof(OBPoint);
         }
+		
+		vector <uint8_t> pointcloudData;
+		if( mPointcloudData.size() != pointcloudSize){
+			mPointcloudData.resize(pointcloudSize);
+		}
 
-        mPointCloudMesh = ofMesh();  
+        mPointCloudMesh = ofMesh();
         mPointCloudPts.clear();
-        mPointCloudPts.reserve(pointsSize);
-
+        mPointCloudPts.reserve(numPoints);
         mPointCloudMesh.setMode(OF_PRIMITIVE_POINTS);
 
-
         if( bRGB ){
-            std::vector <ofFloatColor> tColors;
-            tColors.reserve(pointsSize);
+			OBColorPoint *point = (OBColorPoint *)&mPointcloudData[0];
+			ob::CoordinateTransformHelper::transformationDepthToRGBDPointCloud(&xyTables, depthFrame->data(), colorFrame->data(), point);
 
-            OBColorPoint *point = (OBColorPoint *)frame->data();
-            for(int i = 0; i < pointsSize; i++) {
+			point = (OBColorPoint *)&mPointcloudData[0];
+
+            std::vector <ofFloatColor> tColors;
+            tColors.reserve(numPoints);
+
+            for(int i = 0; i < numPoints; i++) {
                 auto pt = glm::vec3(point->x, -point->y, -point->z);
 
                 mPointCloudPts.push_back(pt);
@@ -573,8 +632,12 @@ void ofxOrbbecCamera::pointCloudToMesh(shared_ptr<ob::Frame> frame, bool bRGB){
             mPointCloudMesh.addColors(tColors);
 
         }else{
-            OBPoint *point = (OBPoint *)frame->data();
-            for(int i = 0; i < pointsSize; i++) {
+			OBPoint *point = (OBPoint *)&mPointcloudData[0];
+			ob::CoordinateTransformHelper::transformationDepthToPointCloud(&xyTables, depthFrame->data(), point);
+
+			point = (OBPoint *)&mPointcloudData[0];
+
+            for(int i = 0; i < numPoints; i++) {
                 auto pt = glm::vec3(point->x, -point->y, -point->z);
 
                 mPointCloudPts.push_back(pt);
@@ -584,5 +647,16 @@ void ofxOrbbecCamera::pointCloudToMesh(shared_ptr<ob::Frame> frame, bool bRGB){
 
         mPointCloudMesh.addVertices(mPointCloudPts);
         mPointCloudMesh.setupIndicesAuto(); 
+
+        if( lock() ){
+            mPointCloudMeshLocal = mPointCloudMesh; 
+            mPointCloudPtsLocal = mPointCloudPts;
+            if( bRGB ){
+                mInternalColorFrameNo++;
+            }else{
+                mInternalDepthFrameNo++;
+            }
+            unlock();
+        }
     }
 }

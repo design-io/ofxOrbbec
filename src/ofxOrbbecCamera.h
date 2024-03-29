@@ -78,8 +78,8 @@ class ofxOrbbecCamera : public ofThread{
         void clear(); 
         
         ofPixels processFrame(shared_ptr<ob::Frame> frame);
-        void pointCloudToMesh(shared_ptr<ob::Frame> frame, bool bRGB = false);
-        
+		void pointCloudToMesh(shared_ptr<ob::DepthFrame> depthFrame, shared_ptr<ob::ColorFrame> colorFrame = shared_ptr<ob::ColorFrame>() );
+
         ofxOrbbec::Settings mCurrentSettings;
         
         bool bNewFrameColor, bNewFrameDepth, bNewFrameIR = false; 
@@ -93,7 +93,9 @@ class ofxOrbbecCamera : public ofThread{
         ofFloatPixels mDepthPixelsF;
 
         ofMesh mPointCloudMesh; 
+        ofMesh mPointCloudMeshLocal;
         vector <glm::vec3> mPointCloudPts;
+        vector <glm::vec3> mPointCloudPtsLocal;
 
 		std::shared_ptr <ob::Pipeline> mPipe;
    		std::shared_ptr <ob::PointCloudFilter> pointCloud;
@@ -114,6 +116,10 @@ class ofxOrbbecCamera : public ofThread{
             void initH26XCodecs();
             ofPixels decodeH26XFrame(uint8_t * myData, int dataSize, bool bH264);
 
-        #endif 
+        #endif
+        
+        OBXYTables xyTables;
+        vector <float> xyTableData;
+        vector <uint8_t> mPointcloudData;
 
 };
