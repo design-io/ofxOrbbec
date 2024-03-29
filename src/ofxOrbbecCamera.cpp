@@ -629,6 +629,7 @@ void ofxOrbbecCamera::pointCloudToMesh(shared_ptr<ob::DepthFrame> depthFrame, sh
 
                 point++;
             }
+            mPointCloudMesh.clear();
             mPointCloudMesh.addColors(tColors);
 
         }else{
@@ -643,6 +644,7 @@ void ofxOrbbecCamera::pointCloudToMesh(shared_ptr<ob::DepthFrame> depthFrame, sh
                 mPointCloudPts.push_back(pt);
                 point++;
             }
+            mPointCloudMesh.clear();
         }
 
         mPointCloudMesh.addVertices(mPointCloudPts);
