@@ -58,7 +58,7 @@ class ofxOrbbecCamera : public ofThread{
         void close();
         void update();
 
-        static std::vector < std::shared_ptr<ob::DeviceInfo> > getDeviceList(); 
+        static std::vector < std::shared_ptr<ob::DeviceInfo> > getDeviceList(bool bIncludeNetworkDevices); 
 
         //any frame
         bool isFrameNew();
@@ -121,5 +121,7 @@ class ofxOrbbecCamera : public ofThread{
         OBXYTables xyTables;
         vector <float> xyTableData;
         vector <uint8_t> mPointcloudData;
+        bool bConnected = false; 
+        float mTimeSinceFrame = 0; 
 
 };

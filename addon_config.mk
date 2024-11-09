@@ -26,6 +26,9 @@ common:
 	# or use += in several lines
 	ADDON_DEPENDENCIES = ofxOpenCv
 
+    # defines that will be passed to the compiler when including this addon
+	ADDON_DEFINES = OF_ADDON_HAS_OFX_ORBBEC
+
 	# include search paths, this will be usually parsed from the file system
 	# but if the addon or addon libraries need special search paths they can be
 	# specified here separated by spaces or one per line using +=
@@ -60,6 +63,3 @@ common:
 	# a specific platform
 	# ADDON_LIBS_EXCLUDE =
 
-linux64:
-	ADDON_LIBS =
-	ADDON_LIBS += libs/orbbec/lib/linux64/libOrbbecSDK.so

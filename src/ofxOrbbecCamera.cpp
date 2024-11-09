@@ -3,10 +3,13 @@
 #include <libobsensor/hpp/Utils.hpp>
 
 
-std::vector < std::shared_ptr<ob::DeviceInfo> > ofxOrbbecCamera::getDeviceList(){
+std::vector < std::shared_ptr<ob::DeviceInfo> > ofxOrbbecCamera::getDeviceList(bool bNetIncDevices){
     std::vector<std::shared_ptr<ob::DeviceInfo> > dInfo; 
 
     auto tCtx = make_shared<ob::Context>(); //ofxOrbbecCamera::getContext();
+    if( bNetIncDevices ){
+		tCtx->enableNetDeviceEnumeration(true); 
+	}
 
     // Query the list of connected devices
         auto devList = tCtx->queryDeviceList();
@@ -65,8 +68,11 @@ void ofxOrbbecCamera::clear(){
     bNewFrameColor = bNewFrameDepth = bNewFrameIR = false;
     mInternalColorFrameNo = mInternalDepthFrameNo = 0;
     mExtColorFrameNo = mExtDepthFrameNo = 0;
+
     mPipe.reset();
 	ctxLocal.reset();
+    bConnected = false; 
+    mTimeSinceFrame = 0.0;
 }
 
 bool ofxOrbbecCamera::open(ofxOrbbec::Settings aSettings){
@@ -255,7 +261,7 @@ bool ofxOrbbecCamera::open(ofxOrbbec::Settings aSettings){
             }
 
             ob::Context::setLoggerSeverity(OB_LOG_SEVERITY_ERROR);
-
+            bConnected = true; 
             startThread();
 
         }else{
@@ -269,7 +275,7 @@ bool ofxOrbbecCamera::open(ofxOrbbec::Settings aSettings){
 
 bool ofxOrbbecCamera::isConnected(){
 	if( mPipe && mPipe->getDevice() ){
-		return true;
+        return bConnected; 
 	}
 	return false;
 }
@@ -308,6 +314,15 @@ void ofxOrbbecCamera::update(){
         }
         if( mInternalColorFrameNo > mExtColorFrameNo ){
             bNewFrameColor = true; 
+        }
+        if( bNewFrameColor || bNewFrameDepth || bNewFrameIR ){
+            mTimeSinceFrame = 0; 
+            bConnected = true; 
+        }else{
+            mTimeSinceFrame += ofClamp(ofGetLastFrameTime(), 1.0/250.0, 1.0/5.0); 
+        }
+        if( bConnected && mTimeSinceFrame > 5.0 ){
+            bConnected = false; 
         }
     }
 }
@@ -629,7 +644,6 @@ void ofxOrbbecCamera::pointCloudToMesh(shared_ptr<ob::DepthFrame> depthFrame, sh
 
                 point++;
             }
-            mPointCloudMesh.clear();
             mPointCloudMesh.addColors(tColors);
 
         }else{
@@ -644,7 +658,6 @@ void ofxOrbbecCamera::pointCloudToMesh(shared_ptr<ob::DepthFrame> depthFrame, sh
                 mPointCloudPts.push_back(pt);
                 point++;
             }
-            mPointCloudMesh.clear();
         }
 
         mPointCloudMesh.addVertices(mPointCloudPts);
