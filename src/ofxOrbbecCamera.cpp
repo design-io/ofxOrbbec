@@ -6,17 +6,18 @@
 std::vector < std::shared_ptr<ob::DeviceInfo> > ofxOrbbecCamera::getDeviceList(bool bNetIncDevices){
     std::vector<std::shared_ptr<ob::DeviceInfo> > dInfo; 
 
-    auto tCtx = make_shared<ob::Context>(); //ofxOrbbecCamera::getContext();
+    auto tCtx = std::make_shared<ob::Context>(); //ofxOrbbecCamera::getContext();
     if( bNetIncDevices ){
 		tCtx->enableNetDeviceEnumeration(true); 
 	}
 
     // Query the list of connected devices
-        auto devList = tCtx->queryDeviceList();
+    auto devList = tCtx->queryDeviceList();
     
     // Get the number of connected devices
     int devCount = devList->deviceCount();
-
+    ofLogNotice("ofxOrbbecCamera::getDeviceList()") << "Found " << devCount << " devices" << std::endl;
+    
     // traverse the device list and create a pipe
     for(int i = 0; i < devCount; i++) {
         auto dev  = devList->getDevice(i);
@@ -81,7 +82,7 @@ bool ofxOrbbecCamera::open(ofxOrbbec::Settings aSettings){
 	ob::Context::setLoggerToFile(OB_LOG_SEVERITY_OFF, "log.txt");
 	ob::Context::setLoggerToConsole(OB_LOG_SEVERITY_INFO);
 
-	ctxLocal = make_shared<ob::Context>();
+	ctxLocal = std::make_shared<ob::Context>();
     auto tCtx = ctxLocal;
 
     std::shared_ptr<ob::Device> device;
@@ -121,7 +122,7 @@ bool ofxOrbbecCamera::open(ofxOrbbec::Settings aSettings){
             std::cout << "["<< i <<"] device is " << info->name() << " serial: " << info->serialNumber() << std::endl; 
 
             if( openWithSerial ){
-                string serialStr(info->serialNumber()); 
+                std::string serialStr(info->serialNumber());
                 if( aSettings.deviceSerial == serialStr ){
                     device = dev;
                     break; 
@@ -145,8 +146,8 @@ bool ofxOrbbecCamera::open(ofxOrbbec::Settings aSettings){
              // Create Config for configuring Pipeline work
             std::shared_ptr<ob::Config> config = std::make_shared<ob::Config>();
 
-			shared_ptr<ob::StreamProfile> depthProfile;
-			shared_ptr<ob::StreamProfile> colorProfile;
+            std::shared_ptr<ob::StreamProfile> depthProfile;
+            std::shared_ptr<ob::StreamProfile> colorProfile;
 
             if( aSettings.bDepth ){
                 // Get the depth camera configuration list
@@ -240,7 +241,7 @@ bool ofxOrbbecCamera::open(ofxOrbbec::Settings aSettings){
 					xyTableData.resize(tableSize);
 					
 					if(!ob::CoordinateTransformHelper::transformationInitXYTables(param, OB_SENSOR_COLOR, &xyTableData[0], &tableSize, &xyTables)) {
-						ofLogError() << " couldn't init xyTables for depth " << endl;
+						ofLogError() << " couldn't init xyTables for depth " << std::endl;
 					}
 					
                 }else{
@@ -254,7 +255,7 @@ bool ofxOrbbecCamera::open(ofxOrbbec::Settings aSettings){
 					xyTableData.resize(tableSize);
 					
 					if(!ob::CoordinateTransformHelper::transformationInitXYTables(param, OB_SENSOR_DEPTH, &xyTableData[0], &tableSize, &xyTables)) {
-						ofLogError() << " couldn't init xyTables for depth " << endl;
+						ofLogError() << " couldn't init xyTables for depth " << std::endl;
 					}
 
                 }
@@ -295,7 +296,7 @@ ofPixels ofxOrbbecCamera::getColorPixels(){
     return mColorPixels;
 }
 
-vector <glm::vec3> ofxOrbbecCamera::getPointCloud(){
+std::vector <glm::vec3> ofxOrbbecCamera::getPointCloud(){
     mExtDepthFrameNo = mInternalDepthFrameNo;
     return mPointCloudPtsLocal;
 } 
@@ -482,7 +483,7 @@ ofPixels ofxOrbbecCamera::decodeH26XFrame(uint8_t * myData, int dataSize, bool b
 #endif 
 
 
-ofPixels ofxOrbbecCamera::processFrame(shared_ptr<ob::Frame> frame){
+ofPixels ofxOrbbecCamera::processFrame(std::shared_ptr<ob::Frame> frame){
 
     ofPixels pix; 
     cv::Mat imuMat;
@@ -502,8 +503,8 @@ ofPixels ofxOrbbecCamera::processFrame(shared_ptr<ob::Frame> frame){
                 #ifdef OFXORBBEC_DECODE_H264_H265 
                     pix = decodeH26XFrame((uint8_t*)videoFrame->data(), videoFrame->dataSize(), true);
                 #else
-                    ofLogError("ofxOrbbecCamera::processFrame") << " h264 / h265 not enabled. Define OFXORBBEC_DECODE_H264_H265 or set color format to OB_FORMAT_RGB " << endl;
-                #endif  
+                    ofLogError("ofxOrbbecCamera::processFrame") << " h264 / h265 not enabled. Define OFXORBBEC_DECODE_H264_H265 or set color format to OB_FORMAT_RGB " << std::endl;
+                #endif
 
             break; 
             case OB_FORMAT_H265:
@@ -511,8 +512,8 @@ ofPixels ofxOrbbecCamera::processFrame(shared_ptr<ob::Frame> frame){
                 #ifdef OFXORBBEC_DECODE_H264_H265 
                     pix = decodeH26XFrame((uint8_t*)videoFrame->data(), videoFrame->dataSize(), false);
                 #else
-                    ofLogError("ofxOrbbecCamera::processFrame") << " h264 / h265 not enabled. Define OFXORBBEC_DECODE_H264_H265 or set color format to OB_FORMAT_RGB " << endl;
-                #endif 
+                    ofLogError("ofxOrbbecCamera::processFrame") << " h264 / h265 not enabled. Define OFXORBBEC_DECODE_H264_H265 or set color format to OB_FORMAT_RGB " << std::endl;
+                #endif
 
             break; 
             case OB_FORMAT_MJPG: {
@@ -522,7 +523,7 @@ ofPixels ofxOrbbecCamera::processFrame(shared_ptr<ob::Frame> frame){
                 rstMat = cv::imdecode(rawMat, 1);
                 cv::cvtColor(rstMat, rstMat, cv::COLOR_BGR2RGB);
 #else
-                ofLogError("ofxOrbbecCamera::processFrame") << " MJPG not supported - set color format to OB_FORMAT_RGB " << endl;
+                ofLogError("ofxOrbbecCamera::processFrame") << " MJPG not supported - set color format to OB_FORMAT_RGB " << std::endl;
 #endif
 
             } break;
@@ -585,7 +586,7 @@ ofPixels ofxOrbbecCamera::processFrame(shared_ptr<ob::Frame> frame){
                 rstMat = cv::imdecode(rawMat, 1);
                 rstMat = rawMat;//cv::cvtColor(rstMat * 2, rstMat, cv::COLOR_GRAY2RGB);
 #else
-                ofLogError("ofxOrbbecCamera::processFrame") << " MJPG not supported - set IR format to OB_FORMAT_Y16 or OB_FORMAT_Y8 " << endl;
+                ofLogError("ofxOrbbecCamera::processFrame") << " MJPG not supported - set IR format to OB_FORMAT_Y16 or OB_FORMAT_Y8 " << std::endl;
 #endif
             }
             if(!rstMat.empty()) {
@@ -598,7 +599,7 @@ ofPixels ofxOrbbecCamera::processFrame(shared_ptr<ob::Frame> frame){
     return pix; 
 }
 
-void ofxOrbbecCamera::pointCloudToMesh(shared_ptr<ob::DepthFrame> depthFrame, shared_ptr<ob::ColorFrame> colorFrame){
+void ofxOrbbecCamera::pointCloudToMesh(std::shared_ptr<ob::DepthFrame> depthFrame, std::shared_ptr<ob::ColorFrame> colorFrame){
     if( depthFrame ){
     
 		bool bRGB = false;
@@ -617,7 +618,7 @@ void ofxOrbbecCamera::pointCloudToMesh(shared_ptr<ob::DepthFrame> depthFrame, sh
             pointcloudSize = numPoints * sizeof(OBPoint);
         }
 		
-		vector <uint8_t> pointcloudData;
+        std::vector <uint8_t> pointcloudData;
 		if( mPointcloudData.size() != pointcloudSize){
 			mPointcloudData.resize(pointcloudSize);
 		}

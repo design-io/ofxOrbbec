@@ -77,8 +77,8 @@ class ofxOrbbecCamera : public ofThread{
         void threadedFunction() override; 
         void clear(); 
         
-        ofPixels processFrame(shared_ptr<ob::Frame> frame);
-		void pointCloudToMesh(shared_ptr<ob::DepthFrame> depthFrame, shared_ptr<ob::ColorFrame> colorFrame = shared_ptr<ob::ColorFrame>() );
+        ofPixels processFrame(std::shared_ptr<ob::Frame> frame);
+		void pointCloudToMesh(std::shared_ptr<ob::DepthFrame> depthFrame, std::shared_ptr<ob::ColorFrame> colorFrame = std::shared_ptr<ob::ColorFrame>() );
 
         ofxOrbbec::Settings mCurrentSettings;
         
@@ -94,8 +94,8 @@ class ofxOrbbecCamera : public ofThread{
 
         ofMesh mPointCloudMesh; 
         ofMesh mPointCloudMeshLocal;
-        vector <glm::vec3> mPointCloudPts;
-        vector <glm::vec3> mPointCloudPtsLocal;
+        std::vector <glm::vec3> mPointCloudPts;
+        std::vector <glm::vec3> mPointCloudPtsLocal;
 
 		std::shared_ptr <ob::Pipeline> mPipe;
    		std::shared_ptr <ob::PointCloudFilter> pointCloud;
@@ -119,8 +119,8 @@ class ofxOrbbecCamera : public ofThread{
         #endif
         
         OBXYTables xyTables;
-        vector <float> xyTableData;
-        vector <uint8_t> mPointcloudData;
+        std::vector <float> xyTableData;
+        std::vector <uint8_t> mPointcloudData;
         bool bConnected = false; 
         float mTimeSinceFrame = 0; 
 
