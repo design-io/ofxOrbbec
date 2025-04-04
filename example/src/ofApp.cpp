@@ -4,7 +4,7 @@
 void ofApp::setup(){
 
     ofSetLogLevel(OF_LOG_NOTICE);
-    auto deviceInfo = ofxOrbbecCamera::getDeviceList(); 
+    auto deviceInfo = ofxOrbbecCamera::getDeviceList(true); 
 
     settings.bColor = true; 
     settings.bDepth = true; 
