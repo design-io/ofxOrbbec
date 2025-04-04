@@ -34,6 +34,8 @@ struct Settings{
     int deviceID = 0;
     std::string deviceSerial = "";
 
+    OBRotateDegreeType rotation = OB_ROTATE_DEGREE_0;
+
     FrameType depthFrameSize;
     FrameType colorFrameSize; 
     
