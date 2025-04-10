@@ -7,7 +7,7 @@
 
 //If you have ffmpeg / libavcodec included in your project uncomment below 
 //You can easily get the required libs from ofxFFmpegRTSP addon ( if you add it to your project )
-#define OFXORBBEC_DECODE_H264_H265
+//#define OFXORBBEC_DECODE_H264_H265
 
 // this allows us to decode the color video streams from Femto Mega over IP connection 
 #ifdef OFXORBBEC_DECODE_H264_H265
@@ -37,11 +37,13 @@ struct Settings{
     OBRotateDegreeType rotation = OB_ROTATE_DEGREE_0;
 
     FrameType depthFrameSize;
-    FrameType colorFrameSize; 
-    
+    FrameType colorFrameSize;
+    FrameType irFrameSize;
+
     bool bColor = false;
     bool bDepth = false; 
-    bool bPointCloud = false; 
+    bool bIR = false;
+    bool bPointCloud = false;
     bool bPointCloudRGB = false; 
 };
 
@@ -52,7 +54,7 @@ class ofxOrbbecCamera : public ofThread{
     public:
 
         ofxOrbbecCamera() = default; 
-        ofxOrbbecCamera( const ofxOrbbecCamera & A) = default; 
+        ofxOrbbecCamera(const ofxOrbbecCamera &) = delete;
         ~ofxOrbbecCamera();
 
         bool open(ofxOrbbec::Settings aSettings);
@@ -63,38 +65,55 @@ class ofxOrbbecCamera : public ofThread{
         static std::vector < std::shared_ptr<ob::DeviceInfo> > getDeviceList(bool bIncludeNetworkDevices); 
 
         //any frame
-        bool isFrameNew();
-        bool isFrameNewDepth();
-        bool isFrameNewColor();
-        bool isFrameNewIR();
+        bool isFrameNew() const;
+        bool isFrameNewDepth() const;
+        bool isFrameNewColor() const;
+        bool isFrameNewIR() const;
 
-        ofPixels getDepthPixels();
-        ofFloatPixels getDepthPixelsF(); 
-        ofPixels getColorPixels(); 
+        const ofPixels &getDepthPixels() const;
+        const ofFloatPixels &getDepthPixelsF() const;
         
-        std::vector <glm::vec3> getPointCloud(); 
-        ofMesh getPointCloudMesh();
+        const ofPixels &getColorPixels() const;
+        
+        const ofPixels &getIRPixels() const;
+        const ofShortPixels &getIRPixelsS() const;
+
+        const std::vector <glm::vec3> &getPointCloud() const;
+        const ofMesh &getPointCloudMesh() const;
 
     protected:
         void threadedFunction() override; 
         void clear(); 
         
         ofPixels processFrame(std::shared_ptr<ob::Frame> frame);
+        ofFloatPixels processFrameFloatPixels(std::shared_ptr<ob::Frame> frame);
+        ofShortPixels processFrameShortPixels(std::shared_ptr<ob::Frame> frame);
 		void pointCloudToMesh(std::shared_ptr<ob::DepthFrame> depthFrame, std::shared_ptr<ob::ColorFrame> colorFrame = std::shared_ptr<ob::ColorFrame>() );
 
         ofxOrbbec::Settings mCurrentSettings;
         
-        bool bNewFrameColor, bNewFrameDepth, bNewFrameIR = false; 
+        bool bNewFrameColor = false;
+        bool bNewFrameDepth = false;
+        bool bNewFrameIR = false;
         
-        unsigned int mInternalDepthFrameNo = 0;
-		unsigned int mInternalColorFrameNo = 0;
-		unsigned int mExtDepthFrameNo = 0;
-		unsigned int mExtColorFrameNo = 0;
+        size_t mInternalDepthFrameNo = 0;
+        mutable size_t mExtDepthFrameNo = 0;
+    
+        size_t mInternalColorFrameNo = 0;
+        mutable size_t mExtColorFrameNo = 0;
 
-        ofPixels mDepthPixels, mColorPixels; 
+        size_t mInternalIRFrameNo = 0;
+        mutable size_t mExtIRFrameNo = 0;
+
+        ofPixels mDepthPixels;
         ofFloatPixels mDepthPixelsF;
+        
+        ofPixels mColorPixels;
+        
+        ofPixels mIRPixels;
+        ofShortPixels mIRPixelsS;
 
-        ofMesh mPointCloudMesh; 
+        ofMesh mPointCloudMesh;
         ofMesh mPointCloudMeshLocal;
         std::vector <glm::vec3> mPointCloudPts;
         std::vector <glm::vec3> mPointCloudPtsLocal;
