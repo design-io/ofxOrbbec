@@ -300,12 +300,12 @@ ofPixels ofxOrbbecCamera::getColorPixels(){
     return mColorPixels;
 }
 
-std::vector <glm::vec3> ofxOrbbecCamera::getPointCloud(){
+const std::vector <glm::vec3> &ofxOrbbecCamera::getPointCloud(){
     mExtDepthFrameNo = mInternalDepthFrameNo;
     return mPointCloudPtsLocal;
 } 
 
-ofMesh ofxOrbbecCamera::getPointCloudMesh(){
+const ofMesh &ofxOrbbecCamera::getPointCloudMesh(){
     mExtDepthFrameNo = mInternalDepthFrameNo;
     return mPointCloudMeshLocal;
 }
@@ -396,15 +396,15 @@ void ofxOrbbecCamera::threadedFunction(){
     }
 }
         
-bool ofxOrbbecCamera::isFrameNew(){
+bool ofxOrbbecCamera::isFrameNew() const {
     return bNewFrameColor || bNewFrameDepth || bNewFrameIR;
 }
 
-bool ofxOrbbecCamera::isFrameNewDepth(){
+bool ofxOrbbecCamera::isFrameNewDepth() const {
     return bNewFrameDepth;
 }
 
-bool ofxOrbbecCamera::isFrameNewColor(){
+bool ofxOrbbecCamera::isFrameNewColor() const {
     return bNewFrameColor;
 }
 
