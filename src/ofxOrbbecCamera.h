@@ -7,7 +7,7 @@
 
 //If you have ffmpeg / libavcodec included in your project uncomment below 
 //You can easily get the required libs from ofxFFmpegRTSP addon ( if you add it to your project )
-#define OFXORBBEC_DECODE_H264_H265
+//#define OFXORBBEC_DECODE_H264_H265
 
 // this allows us to decode the color video streams from Femto Mega over IP connection 
 #ifdef OFXORBBEC_DECODE_H264_H265
@@ -52,7 +52,7 @@ class ofxOrbbecCamera : public ofThread{
     public:
 
         ofxOrbbecCamera() = default; 
-        ofxOrbbecCamera( const ofxOrbbecCamera & A) = default; 
+        ofxOrbbecCamera(const ofxOrbbecCamera &) = delete;
         ~ofxOrbbecCamera();
 
         bool open(ofxOrbbec::Settings aSettings);
@@ -63,17 +63,17 @@ class ofxOrbbecCamera : public ofThread{
         static std::vector < std::shared_ptr<ob::DeviceInfo> > getDeviceList(bool bIncludeNetworkDevices); 
 
         //any frame
-        bool isFrameNew();
-        bool isFrameNewDepth();
-        bool isFrameNewColor();
-        bool isFrameNewIR();
+        bool isFrameNew() const;
+        bool isFrameNewDepth() const;
+        bool isFrameNewColor() const;
+        bool isFrameNewIR() const;
 
         ofPixels getDepthPixels();
         ofFloatPixels getDepthPixelsF(); 
         ofPixels getColorPixels(); 
         
-        std::vector <glm::vec3> getPointCloud(); 
-        ofMesh getPointCloudMesh();
+        const std::vector <glm::vec3> &getPointCloud();
+        const ofMesh &getPointCloudMesh();
 
     protected:
         void threadedFunction() override; 
@@ -84,12 +84,14 @@ class ofxOrbbecCamera : public ofThread{
 
         ofxOrbbec::Settings mCurrentSettings;
         
-        bool bNewFrameColor, bNewFrameDepth, bNewFrameIR = false; 
+        bool bNewFrameColor = false;
+        bool bNewFrameDepth = false;
+        bool bNewFrameIR = false;
         
-        unsigned int mInternalDepthFrameNo = 0;
-		unsigned int mInternalColorFrameNo = 0;
-		unsigned int mExtDepthFrameNo = 0;
-		unsigned int mExtColorFrameNo = 0;
+        size_t mInternalDepthFrameNo = 0;
+        size_t mInternalColorFrameNo = 0;
+        size_t mExtDepthFrameNo = 0;
+        size_t mExtColorFrameNo = 0;
 
         ofPixels mDepthPixels, mColorPixels; 
         ofFloatPixels mDepthPixelsF;
