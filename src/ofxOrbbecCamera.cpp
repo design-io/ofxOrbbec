@@ -223,6 +223,10 @@ bool ofxOrbbecCamera::open(ofxOrbbec::Settings aSettings){
 
             // Pass in the configuration and start the pipeline
             mPipe->start(config);
+            
+            if (device->isPropertySupported(OB_PROP_DEPTH_ROTATE_INT, OB_PERMISSION_WRITE)) {
+                device->setIntProperty(OB_PROP_DEPTH_ROTATE_INT, aSettings.rotation);
+            }
 
             if( aSettings.bPointCloud || aSettings.bPointCloudRGB ){
                 auto cameraParam = mPipe->getCameraParam();
