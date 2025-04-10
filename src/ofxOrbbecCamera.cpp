@@ -285,27 +285,37 @@ bool ofxOrbbecCamera::isConnected(){
 	return false;
 }
 
-ofPixels ofxOrbbecCamera::getDepthPixels(){
+const ofPixels &ofxOrbbecCamera::getDepthPixels() const {
     mExtDepthFrameNo = mInternalDepthFrameNo;
     return mDepthPixels;
 }
 
-ofFloatPixels ofxOrbbecCamera::getDepthPixelsF(){
+const ofFloatPixels &ofxOrbbecCamera::getDepthPixelsF() const {
     mExtDepthFrameNo = mInternalDepthFrameNo;
     return mDepthPixelsF;
 } 
 
-ofPixels ofxOrbbecCamera::getColorPixels(){
+const ofPixels &ofxOrbbecCamera::getColorPixels() const {
     mExtColorFrameNo = mInternalColorFrameNo;
     return mColorPixels;
 }
 
-const std::vector <glm::vec3> &ofxOrbbecCamera::getPointCloud(){
+const ofPixels &ofxOrbbecCamera::getIRPixels() const {
+    mExtIRFrameNo = mInternalIRFrameNo;
+    return mIRPixels;
+}
+
+const ofShortPixels &ofxOrbbecCamera::getIRPixelsS() const {
+    mExtIRFrameNo = mInternalIRFrameNo;
+    return mIRPixelsS;
+}
+
+const std::vector <glm::vec3> &ofxOrbbecCamera::getPointCloud() const {
     mExtDepthFrameNo = mInternalDepthFrameNo;
     return mPointCloudPtsLocal;
 } 
 
-const ofMesh &ofxOrbbecCamera::getPointCloudMesh(){
+const ofMesh &ofxOrbbecCamera::getPointCloudMesh() const {
     mExtDepthFrameNo = mInternalDepthFrameNo;
     return mPointCloudMeshLocal;
 }
@@ -337,12 +347,11 @@ void ofxOrbbecCamera::threadedFunction(){
         if( mPipe ){
             auto frameSet = mPipe->waitForFrames(20);
             if(frameSet) {
-                
-                if( mCurrentSettings.bDepth ){
+                if( mCurrentSettings.bDepth ) {
                     auto depthFrame = frameSet->getFrame(OB_FRAME_DEPTH);
                     if(depthFrame) {
                         mDepthPixels = processFrame(depthFrame);
-
+                        mDepthPixelsF = processFrameFloatPixels(depthFrame);
                         if( mCurrentSettings.bPointCloud && !mCurrentSettings.bPointCloudRGB ){
                             try {
                                 std::shared_ptr<ob::Frame> pointCloudFrame = pointCloud->process(frameSet);
@@ -356,9 +365,9 @@ void ofxOrbbecCamera::threadedFunction(){
                         }
 
                     }
-                }
+                } // if( mCurrentSettings.bDepth )
 
-                if( mCurrentSettings.bColor ){
+                if( mCurrentSettings.bColor ) {
                     auto colorFrame = frameSet->getFrame(OB_FRAME_COLOR);
                     if(colorFrame) {
                         mColorPixels = processFrame(colorFrame);
@@ -383,12 +392,19 @@ void ofxOrbbecCamera::threadedFunction(){
                                 mInternalColorFrameNo++; 
                             }
                         }
+                    }
+                } // if(mCurrentSettings.bColor)
 
-                
-
+                if( mCurrentSettings.bIR ) {
+                    auto irFrame = frameSet->irFrame();
+                    if(irFrame) {
+                        mIRPixels = processFrame(irFrame);
+                        mIRPixelsS = processFrameShortPixels(irFrame);
+                        mInternalIRFrameNo++;
+                    } else {
+                        ofLogError() << "ir frame is null";
                     }
                 }
-
             }
         }
 
@@ -602,6 +618,63 @@ ofPixels ofxOrbbecCamera::processFrame(std::shared_ptr<ob::Frame> frame){
     }
     return pix; 
 }
+
+ofFloatPixels ofxOrbbecCamera::processFrameFloatPixels(std::shared_ptr<ob::Frame> frame) {
+    ofFloatPixels pix;
+    cv::Mat imuMat;
+    cv::Mat rstMat;
+
+    try{
+        if( !frame ){
+            return pix;
+        }
+
+        if(frame->type() == OB_FRAME_DEPTH) {
+            auto videoFrame = frame->as<ob::VideoFrame>();
+            if(videoFrame->format() == OB_FORMAT_Y16) {
+                std::vector<float> raw_pixels;
+                raw_pixels.resize(videoFrame->width() * videoFrame->height());
+                float scale = videoFrame->as<ob::DepthFrame>()->getValueScale();
+                std::for_each(raw_pixels.begin(),
+                              raw_pixels.end(),
+                              [scale](float &x) { x *= scale; });
+                std::memcpy(raw_pixels.data(), videoFrame->data(), sizeof(float) * videoFrame->width() * videoFrame->height());
+                
+                pix.setFromPixels(raw_pixels.data(), videoFrame->width(), videoFrame->height(), 1);
+            }
+        }
+    } catch(const cv::Exception& ex) {
+        ofLogError("processFrame") << " OB_FORMAT not supported " << std::endl;
+    }
+    return pix;
+}
+
+ofShortPixels ofxOrbbecCamera::processFrameShortPixels(std::shared_ptr<ob::Frame> frame) {
+    ofShortPixels pix;
+    cv::Mat imuMat;
+    cv::Mat rstMat;
+
+    try{
+        if( !frame ){
+            return pix;
+        }
+
+        if(frame->type() == OB_FRAME_DEPTH
+           || frame->type() == OB_FRAME_IR
+           || frame->type() == OB_FRAME_IR_LEFT
+           || frame->type() == OB_FRAME_IR_RIGHT)
+        {
+            auto videoFrame = frame->as<ob::VideoFrame>();
+            if(videoFrame->format() == OB_FORMAT_Y16) {
+                pix.setFromPixels((unsigned short *)videoFrame->data(), videoFrame->width(), videoFrame->height(), 1);
+            }
+        }
+    } catch(const cv::Exception& ex) {
+        ofLogError("processFrame") << " OB_FORMAT not supported " << std::endl;
+    }
+    return pix;
+}
+
 
 void ofxOrbbecCamera::pointCloudToMesh(std::shared_ptr<ob::DepthFrame> depthFrame, std::shared_ptr<ob::ColorFrame> colorFrame){
     if( depthFrame ){
