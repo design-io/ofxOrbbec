@@ -292,7 +292,7 @@ bool ofxOrbbecCamera::open(ofxOrbbec::Settings aSettings){
     return true; 
 }
 
-bool ofxOrbbecCamera::isConnected(){
+bool ofxOrbbecCamera::isConnected() const {
 	if( mPipe && mPipe->getDevice() ){
         return bConnected; 
 	}

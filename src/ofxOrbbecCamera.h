@@ -60,7 +60,7 @@ class ofxOrbbecCamera : public ofThread{
         ~ofxOrbbecCamera();
 
         bool open(ofxOrbbec::Settings aSettings);
-        bool isConnected();
+        bool isConnected() const;
         void close();
         void update();
 
