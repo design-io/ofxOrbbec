@@ -807,3 +807,7 @@ void ofxOrbbecCamera::pointCloudToMesh(std::shared_ptr<ob::DepthFrame> depthFram
         }
     }
 }
+
+void ofxOrbbecCamera::setOrbbecLogLevel(OBLogSeverity level) {
+    ob::Context::setLoggerSeverity(level);
+}
