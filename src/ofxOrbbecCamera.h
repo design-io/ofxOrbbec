@@ -37,12 +37,14 @@ struct Settings{
     OBRotateDegreeType rotation = OB_ROTATE_DEGREE_0;
 
     FrameType depthFrameSize;
-    FrameType colorFrameSize; 
-    
+    FrameType colorFrameSize;
+    FrameType irFrameSize;
+
     bool bColor = false;
     bool bDepth = false; 
-    bool bPointCloud = false; 
-    bool bPointCloudRGB = false;
+    bool bIR = false;
+    bool bPointCloud = false;
+    bool bPointCloudRGB = false; 
     
     bool bIMU = false;
 };
@@ -58,7 +60,7 @@ class ofxOrbbecCamera : public ofThread{
         ~ofxOrbbecCamera();
 
         bool open(ofxOrbbec::Settings aSettings);
-        bool isConnected();
+        bool isConnected() const;
         void close();
         void update();
 
@@ -69,13 +71,17 @@ class ofxOrbbecCamera : public ofThread{
         bool isFrameNewDepth() const;
         bool isFrameNewColor() const;
         bool isFrameNewIR() const;
+
+        const ofPixels &getDepthPixels() const;
+        const ofFloatPixels &getDepthPixelsF() const;
         
-        ofPixels getDepthPixels();
-        ofFloatPixels getDepthPixelsF(); 
-        ofPixels getColorPixels(); 
+        const ofPixels &getColorPixels() const;
         
-        const std::vector <glm::vec3> &getPointCloud();
-        const ofMesh &getPointCloudMesh();
+        const ofPixels &getIRPixels() const;
+        const ofShortPixels &getIRPixelsS() const;
+
+        const std::vector <glm::vec3> &getPointCloud() const;
+        const ofMesh &getPointCloudMesh() const;
         
         glm::vec3 getGyro() const {
             return gyro;
@@ -89,6 +95,8 @@ class ofxOrbbecCamera : public ofThread{
         void clear(); 
         
         ofPixels processFrame(std::shared_ptr<ob::Frame> frame);
+        ofFloatPixels processFrameFloatPixels(std::shared_ptr<ob::Frame> frame);
+        ofShortPixels processFrameShortPixels(std::shared_ptr<ob::Frame> frame);
 		void pointCloudToMesh(std::shared_ptr<ob::DepthFrame> depthFrame, std::shared_ptr<ob::ColorFrame> colorFrame = std::shared_ptr<ob::ColorFrame>() );
 
         ofxOrbbec::Settings mCurrentSettings;
@@ -98,14 +106,23 @@ class ofxOrbbecCamera : public ofThread{
         bool bNewFrameIR = false;
         
         size_t mInternalDepthFrameNo = 0;
+        mutable size_t mExtDepthFrameNo = 0;
+    
         size_t mInternalColorFrameNo = 0;
-        size_t mExtDepthFrameNo = 0;
-        size_t mExtColorFrameNo = 0;
+        mutable size_t mExtColorFrameNo = 0;
 
-        ofPixels mDepthPixels, mColorPixels; 
+        size_t mInternalIRFrameNo = 0;
+        mutable size_t mExtIRFrameNo = 0;
+
+        ofPixels mDepthPixels;
         ofFloatPixels mDepthPixelsF;
+        
+        ofPixels mColorPixels;
+        
+        ofPixels mIRPixels;
+        ofShortPixels mIRPixelsS;
 
-        ofMesh mPointCloudMesh; 
+        ofMesh mPointCloudMesh;
         ofMesh mPointCloudMeshLocal;
         std::vector <glm::vec3> mPointCloudPts;
         std::vector <glm::vec3> mPointCloudPtsLocal;
