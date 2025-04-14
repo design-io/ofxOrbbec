@@ -60,7 +60,7 @@ void ofxOrbbecCamera::clear(){
 			pointCloud.reset();
         }
     }catch(ob::Error &e) {
-        std::cerr << "function:" << e.getName() << "\nargs:" << e.getArgs() << "\nmessage:" << e.getMessage() << "\ntype:" << e.getExceptionType() << std::endl;
+        ofLogError("ofxOrbbecCamera::clear") << "function:" << e.getName() << "\nargs:" << e.getArgs() << "\nmessage:" << e.getMessage() << "\ntype:" << e.getExceptionType();
     }
 
     mCurrentSettings = ofxOrbbec::Settings();
@@ -96,7 +96,7 @@ bool ofxOrbbecCamera::open(ofxOrbbec::Settings aSettings){
         try{
             device = tCtx->createNetDevice(aSettings.ip.c_str(), 8090);
         }catch(ob::Error &e) {
-            std::cerr << "function:" << e.getName() << "\nargs:" << e.getArgs() << "\nmessage:" << e.getMessage() << "\ntype:" << e.getExceptionType() << std::endl;
+            ofLogError("ofxOrbbecCamera::open") << "function:" << e.getName() << "\nargs:" << e.getArgs() << "\nmessage:" << e.getMessage() << "\ntype:" << e.getExceptionType();
         }
         if(!device){
             return false; 
@@ -112,12 +112,12 @@ bool ofxOrbbecCamera::open(ofxOrbbec::Settings aSettings){
         bool openWithSerial = aSettings.deviceSerial != "";
 
         // traverse the device list and create a pipe
+        std::ostringstream os{""};
         for(int i = 0; i < devCount; i++) {
             // Get the device and create the pipeline
             auto dev  = devList->getDevice(i);
             auto info = dev->getDeviceInfo();
-
-            std::cout << "["<< i <<"] device is " << info->name() << " serial: " << info->serialNumber() << std::endl; 
+            os << "[" << i << "] device is " << info->name() << " serial: " << info->serialNumber() << std::endl;
 
             if( openWithSerial ){
                 std::string serialStr(info->serialNumber());
@@ -132,8 +132,8 @@ bool ofxOrbbecCamera::open(ofxOrbbec::Settings aSettings){
                 }
             }
         }
-
-    }    
+        ofLogNotice("ofxOrbbecCamera::open") << "\n" << os.str();
+    }
 
     if( device ){
         // pass in device to create pipeline
@@ -259,7 +259,7 @@ bool ofxOrbbecCamera::open(ofxOrbbec::Settings aSettings){
 					xyTableData.resize(tableSize);
 					
 					if(!ob::CoordinateTransformHelper::transformationInitXYTables(param, OB_SENSOR_COLOR, &xyTableData[0], &tableSize, &xyTables)) {
-						ofLogError() << " couldn't init xyTables for depth " << std::endl;
+						ofLogError("ofxOrbbecCamera::open") << " couldn't init xyTables for depth " << std::endl;
 					}
 					
                 }else{
@@ -273,7 +273,7 @@ bool ofxOrbbecCamera::open(ofxOrbbec::Settings aSettings){
 					xyTableData.resize(tableSize);
 					
 					if(!ob::CoordinateTransformHelper::transformationInitXYTables(param, OB_SENSOR_DEPTH, &xyTableData[0], &tableSize, &xyTables)) {
-						ofLogError() << " couldn't init xyTables for depth " << std::endl;
+						ofLogError("ofxOrbbecCamera::open") << " couldn't init xyTables for depth " << std::endl;
 					}
 
                 }
@@ -378,7 +378,7 @@ void ofxOrbbecCamera::threadedFunction(){
                                 pointCloudToMesh(frameSet->depthFrame());
                             }
                             catch(std::exception &e) {
-                                std::cout << "Get point cloud failed" << std::endl;
+                                ofLogError("ofxOrbbecCamera::threadedFunction") << "Get point cloud failed";
                             };
                         }else{
                             mInternalDepthFrameNo++; 
@@ -402,7 +402,7 @@ void ofxOrbbecCamera::threadedFunction(){
                                     pointCloudToMesh(frameSet->depthFrame(), frameSet->colorFrame());
                                 }
                                 catch(std::exception &e) {
-                                    std::cout << "Get point cloud failed" << std::endl;
+                                    ofLogError("ofxOrbbecCamera::threadedFunction") << "Get point cloud failed";
                                 }
                             }
                         }else{
@@ -421,7 +421,7 @@ void ofxOrbbecCamera::threadedFunction(){
                         mIRPixelsS = processFrameShortPixels(irFrame);
                         mInternalIRFrameNo++;
                     } else {
-                        ofLogError() << "ir frame is null";
+                        ofLogVerbose("ofxOrbbecCamera::threadedFunction") << "ir frame is null";
                     }
                 }
                 
@@ -438,6 +438,8 @@ void ofxOrbbecCamera::threadedFunction(){
                                 gyro.z = value.z;
                                 gyroQueue.send(gyro);
                             }
+                        } else {
+                            ofLogVerbose("ofxOrbbecCamera::threadedFunction") << "gyro frame is null";
                         }
                     }
                     {
@@ -452,6 +454,8 @@ void ofxOrbbecCamera::threadedFunction(){
                                 accel.z = value.z;
                                 accelQueue.send(accel);
                             }
+                        } else {
+                            ofLogVerbose("ofxOrbbecCamera::threadedFunction") << "acceleration frame is null";
                         }
                     }
                 } // if( mCurrentSettings.bIMU )
@@ -516,8 +520,8 @@ ofPixels ofxOrbbecCamera::decodeH26XFrame(uint8_t * myData, int dataSize, bool b
 
     int ret = avcodec_send_packet(codecContext, &packet);
     if (ret < 0) {
-        cout << "Error sending a packet for decoding" << endl; 
-        return pix; 
+        ofLogError("ofxOrbbecCamera::decodeH26XFrame") << "Error sending a packet for decoding";
+        return pix;
     }
  
     int frameDecoded = avcodec_receive_frame(codecContext, frame);
