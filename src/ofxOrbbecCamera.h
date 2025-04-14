@@ -45,6 +45,8 @@ struct Settings{
     bool bIR = false;
     bool bPointCloud = false;
     bool bPointCloudRGB = false; 
+    
+    bool bIMU = false;
 };
 
 };
@@ -80,7 +82,14 @@ class ofxOrbbecCamera : public ofThread{
 
         const std::vector <glm::vec3> &getPointCloud() const;
         const ofMesh &getPointCloudMesh() const;
-
+        
+        glm::vec3 getGyro() const {
+            return gyro;
+        }
+        glm::vec3 getAcceleration() const {
+            return accel;
+        }
+    
     protected:
         void threadedFunction() override; 
         void clear(); 
@@ -121,8 +130,8 @@ class ofxOrbbecCamera : public ofThread{
 		std::shared_ptr <ob::Pipeline> mPipe;
    		std::shared_ptr <ob::PointCloudFilter> pointCloud;
    		std::shared_ptr <ob::Context> ctxLocal;
-
-        #ifdef OFXORBBEC_DECODE_H264_H265 
+    
+        #ifdef OFXORBBEC_DECODE_H264_H265
 
             bool bInitOneTime = false; 
 
@@ -144,5 +153,8 @@ class ofxOrbbecCamera : public ofThread{
         std::vector <uint8_t> mPointcloudData;
         bool bConnected = false; 
         float mTimeSinceFrame = 0; 
-
+        glm::vec3 gyro;
+        glm::vec3 accel;
+        ofThreadChannel<glm::vec3> gyroQueue;
+        ofThreadChannel<glm::vec3> accelQueue;
 };

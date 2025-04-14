@@ -1,7 +1,5 @@
-
 #include "ofxOrbbecCamera.h"
 #include <libobsensor/hpp/Utils.hpp>
-
 
 std::vector < std::shared_ptr<ob::DeviceInfo> > ofxOrbbecCamera::getDeviceList(bool bNetIncDevices){
     std::vector<std::shared_ptr<ob::DeviceInfo> > dInfo; 
@@ -220,6 +218,22 @@ bool ofxOrbbecCamera::open(ofxOrbbec::Settings aSettings){
 				}
             }
             
+            if( aSettings.bIMU ) {
+                auto gyroSensor = device->getSensorList()->getSensor(OB_SENSOR_GYRO);
+                if(gyroSensor) {
+                    auto profile = gyroSensor->getStreamProfileList()->getProfile(OB_PROFILE_DEFAULT);
+                    config->enableStream(profile);
+                } else {
+                    ofLogWarning("ofxOrbbecCamera::open") << "IMU flag is true, but gyro sensor not supported";
+                }
+                auto accelSensor = device->getSensorList()->getSensor(OB_SENSOR_ACCEL);
+                if(accelSensor) {
+                    auto profile = accelSensor->getStreamProfileList()->getProfile(OB_PROFILE_DEFAULT);
+                    config->enableStream(profile);
+                } else {
+                    ofLogWarning("ofxOrbbecCamera::open") << "IMU flag is true, but accel sensor not supported";
+                }
+            }
 
             // Pass in the configuration and start the pipeline
             mPipe->start(config);
@@ -334,11 +348,17 @@ void ofxOrbbecCamera::update(){
             mTimeSinceFrame = 0; 
             bConnected = true; 
         }else{
-            mTimeSinceFrame += ofClamp(ofGetLastFrameTime(), 1.0/250.0, 1.0/5.0); 
+            mTimeSinceFrame += ofClamp(ofGetLastFrameTime(), 1.0 / 250.0, 1.0 / 5.0);
         }
         if( bConnected && mTimeSinceFrame > 5.0 ){
             bConnected = false; 
         }
+    }
+    while(!gyroQueue.empty()) {
+        gyroQueue.receive(gyro);
+    }
+    while(!accelQueue.empty()) {
+        accelQueue.receive(accel);
     }
 }
 
@@ -363,7 +383,6 @@ void ofxOrbbecCamera::threadedFunction(){
                         }else{
                             mInternalDepthFrameNo++; 
                         }
-
                     }
                 } // if( mCurrentSettings.bDepth )
 
@@ -405,6 +424,37 @@ void ofxOrbbecCamera::threadedFunction(){
                         ofLogError() << "ir frame is null";
                     }
                 }
+                
+                if( mCurrentSettings.bIMU ) {
+                    {
+                        auto frame = frameSet->getFrame(OB_FRAME_GYRO);
+                        if(frame) {
+                            auto gyroFrame = frame->as<ob::GyroFrame>();
+                            if(gyroFrame){
+                                glm::vec3 gyro;
+                                auto value = gyroFrame->value();
+                                gyro.x = value.x;
+                                gyro.y = value.y;
+                                gyro.z = value.z;
+                                gyroQueue.send(gyro);
+                            }
+                        }
+                    }
+                    {
+                        auto frame = frameSet->getFrame(OB_FRAME_ACCEL);
+                        if(frame) {
+                            auto accelFrame = frame->as<ob::AccelFrame>();
+                            if(accelFrame){
+                                glm::vec3 accel;
+                                auto value = accelFrame->value();
+                                accel.x = value.x;
+                                accel.y = value.y;
+                                accel.z = value.z;
+                                accelQueue.send(accel);
+                            }
+                        }
+                    }
+                } // if( mCurrentSettings.bIMU )
             }
         }
 
