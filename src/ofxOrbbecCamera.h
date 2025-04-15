@@ -89,7 +89,8 @@ class ofxOrbbecCamera : public ofThread{
         glm::vec3 getAcceleration() const {
             return accel;
         }
-    
+        
+        static void setOrbbecLogLevel(OBLogSeverity level);
     protected:
         void threadedFunction() override; 
         void clear(); 
