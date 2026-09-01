@@ -63,3 +63,5 @@ common:
 	# a specific platform
 	# ADDON_LIBS_EXCLUDE =
 
+osx:
+	ADDON_FRAMEWORKS = VideoToolbox CoreMedia CoreVideo
