@@ -1,23 +1,40 @@
-#include "ofMain.h"
+//#include "ofMain.h"
+
+#include "ofPixels.h"
+#include "ofMesh.h"
+#include "ofThread.h"
 
 #include "libobsensor/ObSensor.hpp"
 #include "libobsensor/hpp/Error.hpp"
 #include <opencv2/opencv.hpp>
+#include <mutex>
+#include <atomic>
+#include <thread>
+#include <condition_variable>
 
 
 //If you have ffmpeg / libavcodec included in your project uncomment below 
 //You can easily get the required libs from ofxFFmpegRTSP addon ( if you add it to your project )
-//#define OFXORBBEC_DECODE_H264_H265
+#define OFXORBBEC_DECODE_H264_H265
+#ifdef TARGET_OSX
+// comment out to use ffmpeg decoding on macOS.
+// must have the ffmpeg libs linked.
+#define OFXORBBEC_MACOS_DECODE_VIDEOTOOLBOX
+#endif
 
 // this allows us to decode the color video streams from Femto Mega over IP connection 
 #ifdef OFXORBBEC_DECODE_H264_H265
+#ifdef OFXORBBEC_MACOS_DECODE_VIDEOTOOLBOX
+#include "ofxOrbbecH264Decoder.h"
+#else
     extern "C" {
     #include <libavcodec/avcodec.h>
     #include <libavformat/avformat.h>
     #include <libswscale/swscale.h>
     #include <libavutil/imgutils.h>
     }
-#endif 
+#endif
+#endif
 
 namespace ofxOrbbec{
 
@@ -34,19 +51,60 @@ struct Settings{
     int deviceID = 0;
     std::string deviceSerial = "";
 
-    OBRotateDegreeType rotation = OB_ROTATE_DEGREE_0;
-
     FrameType depthFrameSize;
-    FrameType colorFrameSize;
-    FrameType irFrameSize;
-
+    FrameType colorFrameSize; 
+    
     bool bColor = false;
     bool bDepth = false; 
-    bool bIR = false;
-    bool bPointCloud = false;
-    bool bPointCloudRGB = false; 
-    
-    bool bIMU = false;
+    bool bPointCloud = false; 
+    bool bPointCloudRGB = false;
+	bool bAlignDepthToColor = false;
+	bool bIR = false;
+	
+    bool bResetCameraClock = false;
+	
+	std::filesystem::path logFilePath;
+	OBLogSeverity logLevel = OB_LOG_SEVERITY_ERROR;
+};
+
+// copying structure of ob::DeviceInfo so that we can return a device list
+// without storing a context in the class.
+// the ob device list owns the devices and they are unreliable when the ob::device list goes out of scope
+// specifically for getDeviceList
+// https://orbbec.github.io/OrbbecSDK/doc/api/English/classob_1_1DeviceInfo.html
+struct DeviceInfo {
+	
+	std::string& name() {
+		return _name;
+	}
+	
+	int& pid() {return _pid;}
+	int& vid() { return _vid; }
+	std::string& uid() { return _uid; }
+	std::string& serialNumber() { return _serialNumber; }
+	
+	std::string& firmwareVersion() { return _firmwareVersion;}
+	std::string& hardwareVersion() { return _hardwareVersion;}
+	std::string& supportedMinSdkVersion() { return _supportedMinSdkVersion;}
+	
+//	std::string& usbType() { return _usbType;}
+	std::string& connectionType() { return _connectionType;}
+	
+	std::string& ipAddress() {return _ipAddress;}
+	OBDeviceType& deviceType() { return _deviceType; }
+	
+	std::string _name;
+	int _pid =0;
+	int _vid = 0;
+	std::string _uid;
+	std::string _serialNumber;
+	std::string _firmwareVersion;
+	std::string _hardwareVersion;
+	std::string _supportedMinSdkVersion;
+//	std::string _usbType; // deprecated
+	std::string _connectionType;
+	std::string _ipAddress;
+	OBDeviceType _deviceType;
 };
 
 };
@@ -56,106 +114,132 @@ class ofxOrbbecCamera : public ofThread{
     public:
 
         ofxOrbbecCamera() = default; 
-        ofxOrbbecCamera(const ofxOrbbecCamera &) = delete;
+		ofxOrbbecCamera( const ofxOrbbecCamera & A) = delete;
         ~ofxOrbbecCamera();
 
         bool open(ofxOrbbec::Settings aSettings);
-        bool isConnected() const;
+        bool isConnected();
         void close();
         void update();
 
-        static std::vector < std::shared_ptr<ob::DeviceInfo> > getDeviceList(bool bIncludeNetworkDevices); 
+//        static std::vector < std::shared_ptr<ob::DeviceInfo> > getDeviceList(bool bIncludeNetworkDevices);
+		static std::vector< std::shared_ptr<ofxOrbbec::DeviceInfo> > getDeviceList(bool bIncludeNetworkDevices);
 
         //any frame
-        bool isFrameNew() const;
-        bool isFrameNewDepth() const;
-        bool isFrameNewColor() const;
-        bool isFrameNewIR() const;
+        bool isFrameNew();
+        bool isFrameNewDepth();
+        bool isFrameNewColor();
+        bool isFrameNewIR();
 
-        const ofPixels &getDepthPixels() const;
-        const ofFloatPixels &getDepthPixelsF() const;
+        ofPixels getDepthPixels();
+        ofFloatPixels getDepthPixelsF(); 
+        ofPixels getColorPixels();
+		ofPixels getIRPixels(); 
         
-        const ofPixels &getColorPixels() const;
-        
-        const ofPixels &getIRPixels() const;
-        const ofShortPixels &getIRPixelsS() const;
+        std::vector <glm::vec3> getPointCloud(); 
+        ofMesh getPointCloudMesh();
+	
+	/// \brief Get the minimum distance the camera is tracking in millimeters
+	int getMinDistance();
+	/// \brief Set the minimum distance the camera is tracking in millimeters
+	void setMinDistance( int adistInMM );
+	
+	/// \brief Get the maximum distance the camera is tracking in millimeters
+	int getMaxDistance();
+	/// \brief Set the maximum distance the camera is tracking in millimeters
+	void setMaxDistance( int adistInMM );
+	
+	/// \brief Get the maximum IR value for mapping IR pixels.
+	int getMaxIRValue();
+	/// \brief Set the maximum IR value for mapping IR pixel values.
+	void setMaxIRValue( int aMaxIR );
 
-        const std::vector <glm::vec3> &getPointCloud() const;
-        const ofMesh &getPointCloudMesh() const;
-        
-        glm::vec3 getGyro() const {
-            return gyro;
-        }
-        glm::vec3 getAcceleration() const {
-            return accel;
-        }
-        
-        static void setOrbbecLogLevel(OBLogSeverity level);
+	/// \brief: Set properties like OB_PROP_COLOR_GAIN_INT / OB_PROP_COLOR_AUTO_EXPOSURE_BOOL  etc 
+	void setPropertyInt(int propEnum, int value);
+
     protected:
-        void threadedFunction() override; 
-        void clear(); 
-        
+        void threadedFunction() override;
+        void pointCloudThreadFunc();
+        void clear();
+
         ofPixels processFrame(std::shared_ptr<ob::Frame> frame);
-        ofFloatPixels processFrameFloatPixels(std::shared_ptr<ob::Frame> frame);
-        ofShortPixels processFrameShortPixels(std::shared_ptr<ob::Frame> frame);
-		void pointCloudToMesh(std::shared_ptr<ob::DepthFrame> depthFrame, std::shared_ptr<ob::ColorFrame> colorFrame = std::shared_ptr<ob::ColorFrame>() );
+	ofPixels processIRFrame(std::shared_ptr<ob::Frame> frame);
+		void pointCloudToMesh(void* depthData, int depthWidth, int depthHeight, ofPixels* colorPixels = nullptr);
 
         ofxOrbbec::Settings mCurrentSettings;
         
-        bool bNewFrameColor = false;
-        bool bNewFrameDepth = false;
-        bool bNewFrameIR = false;
+        bool bNewFrameColor, bNewFrameDepth, bNewFrameIR = false; 
         
-        size_t mInternalDepthFrameNo = 0;
-        mutable size_t mExtDepthFrameNo = 0;
-    
-        size_t mInternalColorFrameNo = 0;
-        mutable size_t mExtColorFrameNo = 0;
+        std::atomic<unsigned int> mInternalDepthFrameNo{0};
+        std::atomic<unsigned int> mInternalColorFrameNo{0};
+	std::atomic<unsigned int> mInternalIRFrameNo{0};
+	
+        std::atomic<unsigned int> mExtDepthFrameNo{0};
+        std::atomic<unsigned int> mExtColorFrameNo{0};
+	std::atomic<unsigned int> mExtIRFrameNo{0};
 
-        size_t mInternalIRFrameNo = 0;
-        mutable size_t mExtIRFrameNo = 0;
-
-        ofPixels mDepthPixels;
+        // Front buffers — read by main thread via getters
+        ofPixels mDepthPixels, mColorPixels;
         ofFloatPixels mDepthPixelsF;
-        
-        ofPixels mColorPixels;
-        
-        ofPixels mIRPixels;
-        ofShortPixels mIRPixelsS;
-
-        ofMesh mPointCloudMesh;
+	ofPixels mIRPixels;
         ofMesh mPointCloudMeshLocal;
-        std::vector <glm::vec3> mPointCloudPts;
-        std::vector <glm::vec3> mPointCloudPtsLocal;
+		std::vector<glm::vec3> mPointCloudPtsLocal;
+
+        // Back buffers — written by capture thread, swapped to front under mFrameMutex
+        ofPixels mDepthPixelsBack, mColorPixelsBack;
+	ofPixels mIRPixelsBack;
+        ofFloatPixels mDepthPixelsFBack;
+        ofMesh mPointCloudMesh;         // working buffer for point cloud build
+		std::vector<glm::vec3> mPointCloudPts;
+
+        std::mutex mFrameMutex;
+
+        // Dedicated point cloud thread — decouples the slow point cloud build
+        // from the fast capture loop so color/depth frames arrive at full rate.
+        std::thread mPointCloudThread;
+        std::mutex mPointCloudInputMutex;
+        std::condition_variable mPointCloudCV;
+        std::atomic<bool> mPointCloudThreadRunning{false};
+        bool mPointCloudNewData = false;
+        std::shared_ptr<ob::DepthFrame> mPCDepthFrame;
+        //std::shared_ptr<ob::ColorFrame> mPCColorFrame;
 
 		std::shared_ptr <ob::Pipeline> mPipe;
-   		std::shared_ptr <ob::PointCloudFilter> pointCloud;
+   		//std::shared_ptr <ob::PointCloudFilter> pointCloud;
    		std::shared_ptr <ob::Context> ctxLocal;
-    
+
         #ifdef OFXORBBEC_DECODE_H264_H265
+	
+		#if defined(OFXORBBEC_MACOS_DECODE_VIDEOTOOLBOX)
+			ofxOrbbecH264Decoder mVTDecoder;
+		#else
 
-            bool bInitOneTime = false; 
+            bool bInitOneTime = false;
 
-            AVCodec* codec264 = nullptr;
-            AVCodecContext* codecContext264 = nullptr;
+			const AVCodec * codec264 = nullptr;
+			AVCodecContext * codecContext264 = nullptr;
 
-            AVCodec* codec265 = nullptr;
-            AVCodecContext* codecContext265 = nullptr;
+			const AVCodec * codec265 = nullptr;
+			AVCodecContext* codecContext265 = nullptr;
 
             SwsContext* swsContext = nullptr;
 
             void initH26XCodecs();
             ofPixels decodeH26XFrame(uint8_t * myData, int dataSize, bool bH264);
+		#endif
 
         #endif
         
         OBXYTables xyTables;
         std::vector <float> xyTableData;
         std::vector <uint8_t> mPointcloudData;
-        bool bConnected = false; 
-        float mTimeSinceFrame = 0; 
-        glm::vec3 gyro;
-        glm::vec3 accel;
-        ofThreadChannel<glm::vec3> gyroQueue;
-        ofThreadChannel<glm::vec3> accelQueue;
+        bool bConnected = false;
+        float mTimeSinceFrame = 0;
+	
+	std::atomic<int> mMinDistanceMM = 0;
+	std::atomic<int> mMaxDistanceMM = 5460;
+	std::atomic<int> mIRMaxValue = 1000;
+	
+//	std::shared_ptr<ob::Align> mObAlignToColor;
+
 };

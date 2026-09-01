@@ -18,6 +18,8 @@ Copy the src folder from the example/ folder to test the api
 Use the project generator to add ofxOrbbec to your project or import the example project. <br />
 NOTE: Mac cannot use as many of the cameras as Linux or Windows. See the supported cameras in the list here: https://www.orbbec.com/developers/orbbec-sdk/  
 UPDATE: It is possible to use the Femto Mega with an IP connection on macOS. The IP Configuration needs to be done via the Orbbec Viewer tool on Windows or Linux but as long as you can connect to the camera IP, it does work with this addon on macOS. 
+If you are unable to connect via IP, it may be a sandbox issue. Try resetting the approval status:
+`tccutil reset All cc.openframeworks.ofxOrbbecExample`
 
 ### Windows Usage 
 **Use the project generator**<br />
